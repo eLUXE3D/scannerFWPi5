@@ -9,63 +9,14 @@ import time
 import os
 import threading
 
-def _is_pi5():
-    return os.uname()[1] == constants.Info.PI5_UNAME
-
 
 class lanClientPi():
     # variable shared over all classes
 
     def __init__(self):
         # variable for this instance - self..
-        if not _is_pi5():
-            self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        else:
-            self.sock = None
+        self.sock = None
         self.connectionFail=False
-
-    # ------------------------------------------------------------------
-    # Low-level TCP helpers (Pi4 only)
-    # ------------------------------------------------------------------
-
-    def sendCommand(self, TCP_IP, TCP_PORT, commandJSON):
-        retries=3
-        for i in range(retries):
-            success=self.sendCommandNoRetry(TCP_IP, TCP_PORT, commandJSON)
-            if success:
-                break
-            print('Retrying LAN connection')
-            time.sleep(0.5)
-            self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return success
-    
-    def sendCommandNoRetry(self, TCP_IP, TCP_PORT, commandJSON):
-        try:
-            self.sock.settimeout(constants.Scanning.TIMEOUT_CONNECT)
-            self.sock.connect((TCP_IP, TCP_PORT))
-            self.sock.settimeout(constants.Scanning.TIMEOUT_DATA)
-            self.sock.sendall(commandJSON.encode(encoding='ascii', errors="ignore"))
-            self.connectionFail = False
-        except Exception as e:
-            print('connection error', e)
-            self.connectionFail = True
-            self.gracefullClose()
-            self.sock=0
-            return False
-        return True
-
-    def gracefullClose(self):
-        try:
-            self.sock.shutdown(socket.SHUT_WR) #I've finished writing
-            check = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)  # have you finished sending? should be 0 length received if so
-            while (check):
-                print('Waiting for graceful close', self.sock.getsockname())
-                check = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)
-            self.sock.close()
-        except Exception as e:
-            print('ERROR: gracefullClose ', e)
 
     # ------------------------------------------------------------------
     # Pi5: in-process dispatch helpers
@@ -79,7 +30,7 @@ class lanClientPi():
             try:
                 msgDict = constants.Control.mScanSlaveLocal.setPi2Mode(commandDict)
             except Exception as e:
-                print('Pi5 local Pi2 dispatch error:', e)
+                print('Local Pi2 dispatch error:', e)
                 msgDict = {}
             constants.Control.doneCommands.append((CMD_ID, msgDict))
             constants.Control.newCommandDoneFlag.set()
@@ -87,13 +38,13 @@ class lanClientPi():
         t.start()
 
     def _syncCameraLocally(self, clockPi1, captureTimePi1):
-        """On Pi5: update the clock-sync constants directly (no LAN round-trip)."""
+        """Update the clock-sync constants directly (no LAN round-trip)."""
         import lanCamera
         commandDict = {'clockPi1': clockPi1, 'captureTimePi1': captureTimePi1}
         lanCamera.getCameraSyncInfo(None, commandDict)
 
     # ------------------------------------------------------------------
-    # Public API (works on both Pi4 and Pi5)
+    # Public API
     # ------------------------------------------------------------------
 
     def pingScanner(self, IP, PORT):
@@ -101,8 +52,19 @@ class lanClientPi():
                       "command":constants.Protocol.CMD_PING}
         commandJSON=json.dumps(commandDict)
 
-        if not self.sendCommand(IP, PORT, commandJSON):
-            return False#if time out return
+        self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self.sock.settimeout(constants.Scanning.TIMEOUT_CONNECT)
+            self.sock.connect((IP, PORT))
+            self.sock.settimeout(constants.Scanning.TIMEOUT_DATA)
+            self.sock.sendall(commandJSON.encode(encoding='ascii', errors="ignore"))
+            self.connectionFail = False
+        except Exception as e:
+            print('connection error', e)
+            self.connectionFail = True
+            self.sock = 0
+            return False
 
         try:
             data=''
@@ -111,70 +73,20 @@ class lanClientPi():
         except Exception as e:
             print('ERROR pingScanner', e)
         finally:
-            self.gracefullClose()
+            try:
+                self.sock.shutdown(socket.SHUT_WR)
+                check = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)
+                while (check):
+                    check = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)
+                self.sock.close()
+            except Exception as e:
+                print('ERROR: gracefullClose ', e)
         return data
 
-    def sendCalibPointsToPi1(self, printCoordsSet, cameraCoordsSet, undistortedcameraPrintCoordsSet):
-        commandDict={ "header":constants.Protocol.HEADER,
-                      "command":constants.Protocol.CMD_CALIB_POINTS_FROM_PI2_TO_PI1}
-        commandJSON=json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI1, constants.Protocol.TCP_PORT, commandJSON):
-            return#if time out return
-
-        # PUT NUMPY IMAGE INTO A FILE IN MEMORY
-        f = io.BytesIO()
-        np.savez(f, printCoordsSet=printCoordsSet, cameraCoordsSet=cameraCoordsSet, undistortedcameraPrintCoordsSet=undistortedcameraPrintCoordsSet)
-        # SEND IMAGE TO SERVER
-        f.seek(0, 0)
-        try:
-            self.sock.sendfile(f, 0)
-        except Exception as e:
-            print('ERROR: sendCalibPointsToPi1 ', e)
-            import traceback
-            traceback.print_exc()
-        finally:
-            self.gracefullClose()
-        f.close()
-
-    def getCalibDataFromPi1(self):
-        commandDict={ "header":constants.Protocol.HEADER,
-                      "command":constants.Protocol.CMD_CALIB_DATA_FROM_PI1_TO_PI2}
-        commandJSON=json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI1, constants.Protocol.TCP_PORT, commandJSON):
-            return#if time out return
-
-        # RECEIVE THE NPZ
-        osCommands.setRW()
-        f = open('calibrationData.npz', 'wb')
-        data = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)
-        while (data):
-            f.write(data)
-            data = self.sock.recv(constants.Protocol.FILE_BUFFER_SIZE)
-        f.close()
-
-        osCommands.setRO()
-        self.gracefullClose()
-
-        return
-
     def sendCameraSyncInfo(self, clockPi1, captureTimePi1):
-        if _is_pi5():
-            # Both cameras are on the same machine; update the constant directly.
-            self._syncCameraLocally(clockPi1, captureTimePi1)
-            return True
-
-        commandDict = {"header": constants.Protocol.HEADER,
-                       "command": constants.Protocol.CMD_SYNC_CAMERA,
-                       "clockPi1": clockPi1,
-                       "captureTimePi1": captureTimePi1}
-        commandJSON = json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2, commandJSON):
-            return False  # if time out return
+        # Both cameras are on the same machine; update the constant directly.
+        self._syncCameraLocally(clockPi1, captureTimePi1)
         return True
-
 
     def setPi2mode(self, PI2_MODE, EXPOSURE_TIME_SCAN=None, EXPOSURE_TIME_CALIB=None, IMAGE_NUMBER=None, idealCaptureTimeMinPi1=None, PLATE_NUMBER=None, SHOT_NUMBER=None, CAPTURE_TIME_LIST=None, SCAN_IMAGE_LIST=None, RETRY=None, IMAGE_ORDER=None, PROJ_ERROR_LIST=None, SCAN_ID=None):#'scan', 'calib', 'reset'
         CMD_ID=str(uuid.uuid4())
@@ -206,50 +118,14 @@ class lanClientPi():
         if SCAN_ID is not None:
             commandDict["SCAN_ID"] = SCAN_ID
 
-        if _is_pi5():
-            # Dispatch directly in-process to the local ScanSlave instance.
-            self._dispatchPi2ModeLocally(commandDict)
-            return CMD_ID
-
-        commandJSON=json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2, commandJSON):
-            return False#if time out return
-
-        self.gracefullClose()
+        # Dispatch directly in-process to the local ScanSlave instance.
+        self._dispatchPi2ModeLocally(commandDict)
         return CMD_ID
 
-    def captureRequestPi2(self, idealCaptureTimeMin, imageNumber='0'):
-        commandDict = {"header": constants.Protocol.HEADER,
-                       "command": constants.Protocol.CMD_CAPTURE_REQUEST,
-                       "idealCaptureTimeMinPi1": idealCaptureTimeMin,
-                       "imageNumber": imageNumber}
-        commandJSON = json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2, commandJSON):
-            return False  # if time out return
-        self.gracefullClose()
-        return
-
     def commandDone(self, CMD_ID, msgDict={}):
-        if _is_pi5():
-            # On Pi5 there is no Pi2 to notify; the caller already handles results.
-            return True
-
-        commandDict = {"header": constants.Protocol.HEADER,
-                       "command": constants.Protocol.CMD_DONE,
-                       "CMD_ID": CMD_ID}
-        #merge message Dict with commandDict because data passing protocol can't handle nested dict.
-        commandDict = {**commandDict, **msgDict}
-        commandJSON = json.dumps(commandDict)
-
-        if not self.sendCommand(constants.Protocol.IP_PI1, constants.Protocol.TCP_PORT, commandJSON):
-            return False  # if time out return
-        self.gracefullClose()
-        return
+        # There is no separate Pi2; the caller already handles results.
+        return True
 
 
 if __name__ == "__main__":
     pass
-    mLanClient=lanClientPi()
-    mLanClient.pingScanner('169.254.30.155', 5005)

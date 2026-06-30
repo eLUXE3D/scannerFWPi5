@@ -16,13 +16,12 @@ class Control():
     
     #classes
     mServer=None
-    mCapture=None          # Camera 0 (left) – always Pi1/master camera
-    mCaptureRight=None     # Camera 1 (right) – Pi5 only; replaces the slave Pi camera
+    mCapture=None          # Camera 0 (left)
+    mCaptureRight=None     # Camera 1 (right)
     mRealTime= None
-    mRealTimeRight=None    # Pi5 only: RealTimeProcessing for Camera 1
+    mRealTimeRight=None    # RealTimeProcessing for Camera 1
     mScanMaster=None
-    mScanSlave=None
-    mScanSlaveLocal=None   # Pi5 only: in-process ScanSlave instance for Camera 1
+    mScanSlaveLocal=None   # in-process ScanSlave instance for Camera 1
     mProjScreen=None
     #queues and flags
     decodeImageQ=None
@@ -59,23 +58,16 @@ def forcePlateFileUse():
         return False
     
 class Info():
-    PING_REPLY_CODE_MASTER='1_bw'
-    PING_REPLY_CODE_SLAVE = '2_sx'
+    PING_REPLY_CODE='1_bw'
     SCANNER_NAME='Tupel 3D'
     HW_VERSION='5.00'#make sure in format x.xx
     SW_VERSION='0.00'
-    MASTER_UNAME='TupelPi1'
-    SLAVE_UNAME='TupelPi2'
-    PI5_UNAME='TupelPi5'   # hostname for the single Raspberry Pi 5 unit
+    PI5_UNAME='TupelPi5'   # hostname for the Raspberry Pi 5 unit
     SERIAL='1'
-    SERIAL_PI1='TBD'
-    SERIAL_PI2='TBD'
-    SERIAL_PI1_ACTUAL = 'TBD'
-    SERIAL_PI2_ACTUAL = 'TBD'
-    MAC_PI1='TBD'
-    MAC_PI2='TBD'
-    BT_MAC_PI1='TBD'
-    BT_MAC_PI2 = 'TBD'
+    SERIAL_HW='TBD'        # expected hardware serial from resource file
+    SERIAL_HW_ACTUAL='TBD' # actual CPU serial read at startup
+    MAC='TBD'
+    BT_MAC='TBD'
     PROJ_MODEL='C6' #default is c6, only changed if resource file tells it to.
     LEVELLER='MARKER'#MARKER or ARD for ARDUINO (IR or magnetic levelling).If nothing in setup, then left as MARKER as default.
     LENSES='3mm'#default, can be '3mm' or '6mm'
@@ -113,19 +105,12 @@ class Protocol():
     #OLD IP CONNECTIONS
     #VIA ROUTER
     #TCP_IP = '192.168.0.24'#pi1 is .24 pi2 is .23, ethernet and wifi are different (mac address)
-    #TCP_IP_PI2= '192.168.0.23'
     #VIA SWITCH DHCP
     #IP_PI1 = '169.254.59.237' #found from ipconfig or ifconfig linux
-    #IP_PI2 = '169.254.145.169'
     #IP ADDRESSES FOR RELEASE SCANNERS
-    IP_PI1 = '169.254.30.155'  # found from ipconfig or ifconfig linux, candidate release, my version #TODO put back and use this in all releases.
-    IP_PI2 = '169.254.71.46'
-    #FOR CONNECTING TO VERSION 2 DEVELOPMENT MODEL:
-    #IP_PI1 = '169.254.98.0'
-    #IP_PI2 = '169.254.211.66'
+    IP_PI1 = '169.254.30.155'  # found from ipconfig or ifconfig linux, candidate release, my version
 
     TCP_PORT = 5005
-    TCP_PORT_PI2 = 5005
 
     FILE_BUFFER_SIZE = 4*1024
     FACTORY_ZIP='main.zip'

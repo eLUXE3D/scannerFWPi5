@@ -26,10 +26,6 @@ import loadStartTarget
 import scanSlave
 
 
-def _is_pi5():
-    return os.uname()[1] == constants.Info.PI5_UNAME
-
-
 POLLING_TIME=0.25#seconds between checking for new images etc. coming in.
 
 class lanServerMaster():
@@ -49,16 +45,15 @@ class lanServerMaster():
         
         self.server = self.ThreadedTCPServer((constants.Protocol.IP_PI1, constants.Protocol.TCP_PORT), self.ThreadedTCPRequestHandler)  # Port 0 means to select an arbitrary unused port
         
-        #classes – Camera 0 (left / master camera)
+        #classes – Camera 0 (left camera)
         constants.Control.mCapture=captureVideo.capture(preview=False, camera_id=0)
         constants.Control.mCapture.closeCamera()
 
-        # Pi5: also initialise Camera 1 (right / slave camera)
-        if _is_pi5():
-            constants.Control.mCaptureRight = captureVideo.capture(preview=False, camera_id=1)
-            constants.Control.mCaptureRight.closeCamera()
-            constants.Control.mScanSlaveLocal = scanSlave.ScanSlave()
-            print('Pi5: right camera and local ScanSlave initialised')
+        # Camera 1 (right camera)
+        constants.Control.mCaptureRight = captureVideo.capture(preview=False, camera_id=1)
+        constants.Control.mCaptureRight.closeCamera()
+        constants.Control.mScanSlaveLocal = scanSlave.ScanSlave()
+        print('Right camera and local ScanSlave initialised')
 
         constants.Control.mProjScreen=projScreen.projScreen()
         constants.Control.mProjScreen.loadImagesAndResize()
@@ -271,7 +266,7 @@ class lanServerMaster():
             #********************SCAN COMMANDS*******************
             if commandDict["command"]==constants.Protocol.CMD_SCAN:
                 lanHelpers.gracefullClose(self.request)
-                if constants.Info.SERIAL_PI1 != constants.Info.SERIAL_PI1_ACTUAL:
+                if constants.Info.SERIAL_HW != constants.Info.SERIAL_HW_ACTUAL:
                     constants.Info.HW_VERSION='Unknown'
                     return
                 constants.Control.doneCommands = Manager().list()
@@ -326,9 +321,6 @@ def startServer():
     constants.Control.mServer=lanServerMaster()
     try:
         constants.Control.mServer.start()
-        if not _is_pi5():
-            # Pi4: wait for the slave Pi to be ready before showing idle image
-            lanHelpers.waitForPi2Ready()
         constants.Control.mProjScreen.showImageFromFile(constants.Scanning.IDLE_IMAGE)
         while True:
             time.sleep(99999)

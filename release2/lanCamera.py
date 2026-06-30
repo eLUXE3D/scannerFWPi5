@@ -4,12 +4,8 @@ import os
 import time
 import io
 import numpy as np
-import lanClientPi
 import lanHelpers
 import cv2
-
-def _is_pi5():
-    return os.uname()[1] == constants.Info.PI5_UNAME
 
 def startCamera():
     if constants.Control.mCapture.isOpen():
@@ -68,25 +64,15 @@ def getCameraImage(clientPC, commandDict):
 
 def getCameraSyncInfo(clientPC, commandDict):
     """Receive clock-sync data sent from the master camera.
-    On Pi4 this arrives over the LAN from Pi1.
-    On Pi5 it is called directly (clientPC is None); the clock offset is 0
-    because both cameras share the same hardware clock.
+    Both cameras share the same hardware clock on the Pi5, so the clock
+    offset is always 0.
     """
     clockPi1 = commandDict['clockPi1']
     constants.Protocol.CAPTURE_TIME_PI_1 = commandDict['captureTimePi1']
 
-    # Determine clock offset
-    if _is_pi5():
-        # Both cameras on the same Pi5 share the same hardware clock.
-        # CLOCK_OFFSET stays 0; still keep a running buffer so the sync
-        # maths work without special-casing.
-        clockOffset = 0
-    else:
-        if constants.Control.mCapture is not None and constants.Control.mCapture.isOpen():
-            clockPi2 = constants.Control.mCapture.camera.timestamp
-            clockOffset = clockPi2 - clockPi1
-        else:
-            clockOffset = 0
+    # Both cameras are on the same Pi5 and share the same hardware clock.
+    # CLOCK_OFFSET stays 0; still keep a running buffer so the sync maths work.
+    clockOffset = 0
 
     if len(constants.Protocol.CLOCK_OFFSET_BUFFER) == 100:
         constants.Protocol.CLOCK_OFFSET_BUFFER = constants.Protocol.CLOCK_OFFSET_BUFFER[1:] + [clockOffset]
