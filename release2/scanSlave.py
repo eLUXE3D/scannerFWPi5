@@ -15,6 +15,11 @@ import copy
 #CONSTANTS
 CALIB_IMAGE_PATH = 'scanData/calib'
 
+
+def _is_pi5():
+    return os.uname()[1] == constants.Info.PI5_UNAME
+
+
 class ScanSlave():
             
     def __init__(self):
@@ -22,6 +27,31 @@ class ScanSlave():
         self.mCalibProcessor=None
         self.calibImages=None
         self.expectedImages=0
+
+    # ------------------------------------------------------------------
+    # Helpers to pick the right camera / realtime objects on Pi5 vs Pi4
+    # ------------------------------------------------------------------
+
+    def _capture(self):
+        """Return the capture object for the slave camera."""
+        if _is_pi5():
+            return constants.Control.mCaptureRight
+        return constants.Control.mCapture
+
+    def _realtime(self):
+        """Return the RealTimeProcessing object for the slave camera."""
+        if _is_pi5():
+            return constants.Control.mRealTimeRight
+        return constants.Control.mRealTime
+
+    def _set_realtime(self, rt):
+        """Assign a new RealTimeProcessing object for the slave camera."""
+        if _is_pi5():
+            constants.Control.mRealTimeRight = rt
+        else:
+            constants.Control.mRealTime = rt
+
+    # ------------------------------------------------------------------
 
     def setPi2Mode(self, commandDict):
         msg={}
@@ -45,24 +75,19 @@ class ScanSlave():
 
 #FAST SCAN
     def setUpFastScan(self, commandDict):
-        #SET UP CAMERA
-        #constants.Control.mCapture = captureVideo.capture(preview=False)
-        #constants.Control.mCapture.setResolution((constants.Scanning.CAPTURE_W, constants.Scanning.CAPTURE_H))  # crop to 4/3 aspect from now
-        #msec = commandDict["EXPOSURE_TIME_SCAN"]
-        #constants.Control.mCapture.setExposure(msec)
-        #constants.Control.decodeImageQ=JoinableQueue(maxsize=12)#clear images
         with constants.Control.imageLock:
             constants.Control.pcImageList=Manager().list()
-        #self.mTriangulateProcessor = triangulateProcessorSlave.triangulateProcessor(useProcesses=True)
 
-        #SET UP REAL TIME VIDEO CAPTURE
-        constants.Control.mRealTime=realTimeAsync2.RealTimeProcessing(syncMaster=False)
-        constants.Control.mCapture.startVideoAndProcessing(mode='mjpeg')
-        constants.Control.mRealTime.waitForFirstFrame()
-        constants.Control.mRealTime.syncingCameras=True
-        colourImage=None
-        frameTime=1000*1.0/constants.Control.mCapture.camera.framerate#frame time in msec
-        print('FrameTime: ',frameTime)
+        # Camera 1 (right) on Pi5, or the single camera on Pi4/Pi2
+        cam_id = 1 if _is_pi5() else 0
+        rt = realTimeAsync2.RealTimeProcessing(syncMaster=False, camera_id=cam_id)
+        self._set_realtime(rt)
+
+        self._capture().startVideoAndProcessing(mode='mjpeg')
+        rt.waitForFirstFrame()
+        rt.syncingCameras=True
+        frameTime=1000*1.0/self._capture().camera.framerate#frame time in msec
+        print('FrameTime (slave):', frameTime)
 
     def captureScanImagesFast(self,commandDict):#TODO if retry need to remove, old images from imageset, (only if because of projError) 
         captureTimeList=commandDict["CAPTURE_TIME_LIST"]
@@ -74,53 +99,52 @@ class ScanSlave():
         projErrorListPi1=[]
         if "PROJ_ERROR_LIST" in commandDict:
             projErrorListPi1=commandDict["PROJ_ERROR_LIST"]
-        captureTimeListInPi2Time=[]
-        clockOffset=constants.Protocol.CLOCK_OFFSET#TODO can be None on 1.2sec exposure, and crash.
-        #convert time list to pi2 time
-        for captureTime in captureTimeList:
-            captureTimeListInPi2Time.append((captureTime[0] + clockOffset, captureTime[1] + clockOffset))
 
-        constants.Control.mRealTime.removeProjErrorsFromImageSet(projErrorListPi1)
-            
-        constants.Control.mRealTime.captureRequest(captureTimeListInPi2Time, scanImageList=scanImageList, retry=retry)
-        successPi2, missingImageListPi2, dummy=constants.Control.mRealTime.waitForFrameCapture()
-        if retry and successPi2:
-            constants.Control.mRealTime.reorderLists(imageOrder)
+        # On Pi5 both cameras share the same hardware clock so offset is 0.
+        clockOffset = constants.Protocol.CLOCK_OFFSET if constants.Protocol.CLOCK_OFFSET is not None else 0
+        captureTimeListInSlaveTime=[]
+        for captureTime in captureTimeList:
+            captureTimeListInSlaveTime.append((captureTime[0] + clockOffset, captureTime[1] + clockOffset))
+
+        rt = self._realtime()
+        rt.removeProjErrorsFromImageSet(projErrorListPi1)
+        rt.captureRequest(captureTimeListInSlaveTime, scanImageList=scanImageList, retry=retry)
+        successSlave, missingImageListSlave, dummy=rt.waitForFrameCapture()
+        if retry and successSlave:
+            rt.reorderLists(imageOrder)
         msg={}
-        msg['SUCCESS_PI2']=successPi2
-        msg['MISSING_IMAGE_LIST_PI2']=missingImageListPi2
+        msg['SUCCESS_PI2']=successSlave
+        msg['MISSING_IMAGE_LIST_PI2']=missingImageListSlave
         return msg
 
     def processScanShotFast(self, commandDict):
         i=commandDict["SHOT_NUMBER"]
         SCAN_ID=commandDict["SCAN_ID"]
-        #constants.Control.decodeImageQ.put([i, 'R', np.asarray(constants.Control.mRealTime.imageSet), 0, 0, 0, 0, 0, 0, self.expectedImages], True)
+        rt = self._realtime()
         with constants.Control.imageLock:
-            constants.Control.pcImageList.append([copy.deepcopy(i), copy.deepcopy(np.asarray(constants.Control.mRealTime.imageSet)),  0, copy.deepcopy(self.expectedImages), copy.deepcopy(SCAN_ID)])
+            constants.Control.pcImageList.append([copy.deepcopy(i), copy.deepcopy(np.asarray(rt.imageSet)),  0, copy.deepcopy(self.expectedImages), copy.deepcopy(SCAN_ID)])
         if constants.DEBUG.SAVE_SCAN_IMAGES:
-            projSequence.saveDebugImagesFast(constants.Control.mRealTime,i)
+            projSequence.saveDebugImagesFast(rt, i)
 
     def processScanFast(self, commandDict):
         SCAN_ID=commandDict["SCAN_ID"]
         exitCode = -1
         time.sleep(0.1)#may help queue order.
-        #constants.Control.decodeImageQ.put([exitCode, 'R', 0, 0, 0, 0, 0, 0, 0,0], True)
         with constants.Control.imageLock:
-            constants.Control.pcImageList.append([exitCode, 0, 0,0, SCAN_ID])
-        constants.Control.mCapture.stopVideo()
-        constants.Control.mCapture.closeCamera()
-        constants.Control.mRealTime = None  # clear memory
+            constants.Control.pcImageList.append([exitCode, 0, 0, 0, SCAN_ID])
+        self._capture().stopVideo()
+        self._capture().closeCamera()
+        self._set_realtime(None)  # clear memory
 
     def cancelScanFast(self, commandDict):
         SCAN_ID=commandDict["SCAN_ID"]
         exitCode = -2
         time.sleep(0.1)#may help queue order.
-        #constants.Control.decodeImageQ.put([exitCode, 'R', 0, 0, 0, 0, 0, 0, 0,0], True)
         with constants.Control.imageLock:
             constants.Control.pcImageList.append([exitCode,0, 0,0, SCAN_ID])
-        constants.Control.mCapture.stopVideo()
-        constants.Control.mCapture.closeCamera()
-        constants.Control.mRealTime = None  # clear memory
+        self._capture().stopVideo()
+        self._capture().closeCamera()
+        self._set_realtime(None)  # clear memory
         gc.collect()
 
 
