@@ -1,0 +1,21 @@
+#FIXING PI FIRMWARE FOR NEW PIS 10th FEB 2022
+
+#boot shows #1348 - passes my network tests (which are og the pi forum, search TupelUK).
+#debian vesrions: Bullsye (bad for picamera?), Buster, stretch?
+
+sudo date -s "Thu Feb  10 12:14:11 UTC 2022"
+sudo apt update
+sudo apt install rpi-eeprom
+#installed 13.7-1~buster
+vcgencmd bootloader_version
+#shows 2022/01/25 release version
+#6efe41bd9d1e5546fa3715e72e1775b7bd813237
+
+sudo rpi-update ea9e10e531a301b3df568dccb3c931d52a469106
+
+#boot now shows #1514 - also passes my network tests, so seems like the bug is caused at #1348 commit 98d... and before #1514.
+
+
+
+
+

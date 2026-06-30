@@ -1,0 +1,5 @@
+
+https://stackoverflow.com/questions/1250979/any-reason-why-socket-send-hangs/1251551
+
+KEEPALIVE:
+https://www.digi.com/resources/documentation/digidocs/90001537/references/r_handling_socket_error-keepalive.htm

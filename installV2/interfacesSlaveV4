@@ -1,0 +1,20 @@
+auto eth0
+iface eth0 inet static
+        address 169.254.71.46
+        netmask 255.255.0.0
+        gateway 169.254.30.155
+wireless-power off
+		
+#FOR WIFI - DEVELOPMENT ONLY
+#auto eth0
+#iface eth0 inet static
+#        address 169.254.71.46
+#        netmask 255.255.0.0
+
+#auto wlan0
+#allow-hotplug wlan0
+#iface wlan0 inet dhcp
+#        wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
+#wireless-power on
+
+#iface default inet dhcp

@@ -1,0 +1,28 @@
+iptables.ipv4.nat did not exist before v4
+
+
+need to do, on pi1 start:
+
+sudo systemctl start nmbd
+
+#put it in rc.local
+needs smb.conf in etc/samba modifying so it can run on ro card.
+
+
+to restart network on pi:
+
+sudo ifdown --force wlan0
+sudo ifup wlan0
+
+or
+
+sudo service networking restart
+
+
+
+#had problem where iptables would not load, could see using sudo iptables -L
+
+file iptables.ipv4.nat had CR from MS word, caused errors - re copied file and it worked (using winSCP).
+
+
+

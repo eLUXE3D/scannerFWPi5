@@ -1,0 +1,122 @@
+#https://revolution.screenstepslive.com/s/revolution/m/10695/l/563371-signing-installers-you-create-with-inno-setup
+
+
+#****FOR X3D SCAN****
+
+#KEYGEN - to sign pc software using inno setup
+#Run powerShell as ADMIN
+#note need to use -NotAfter, else default is to expire after 1 year.
+#default NotBefore time is 10 minutes.
+
+New-SelfSignedCertificate -Type Custom -Subject "Tupel" -KeyUsage DigitalSignature -FriendlyName "TupelKey" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") -NotAfter (Get-Date).AddYears(500)
+
+Set-Location Cert:\CurrentUser\My
+Get-ChildItem | Format-Table Subject, FriendlyName, Thumbprint
+
+#replace code B6BE... with serial number of key from windows power shell list.
+
+$pwd = ConvertTo-SecureString -String Turing1945x -Force -AsPlainText 
+Export-PfxCertificate -cert "Cert:\CurrentUser\My\0830ED8EB0D1310CA01DDCB1503AD2F753D58B0D" -FilePath C:\Work-TupelGit\Teeth\keys\windowsKeyX3D.pfx -Password $pwd
+
+
+#SignTool in innosetup
+#go to tools, configure signtools
+#put name as signtoolX3D
+#put command as:
+
+"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "C:\Work-TupelGit\Teeth\keys\windowsKeyX3D.pfx" /t http://timestamp.comodoca.com/authenticode /p Turing1945x $f
+
+#in [setup]
+SignTool=signtoolX3D
+
+Change AppId to a new value so it does not install over the other versions.
+
+#****FOR ELUXE GP ****
+
+#KEYGEN - to sign pc software using inno setup
+#Run powerShell as ADMIN
+#note need to use -NotAfter, else default is to expire after 1 year.
+#default NotBefore time is 10 minutes.
+
+New-SelfSignedCertificate -Type Custom -Subject "Tupel" -KeyUsage DigitalSignature -FriendlyName "TupelKey" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") -NotAfter (Get-Date).AddYears(500)
+
+Set-Location Cert:\CurrentUser\My
+Get-ChildItem | Format-Table Subject, FriendlyName, Thumbprint
+
+#replace code B6BE... with serial number of key from windows power shell list.
+
+$pwd = ConvertTo-SecureString -String Turing1945x -Force -AsPlainText 
+Export-PfxCertificate -cert "Cert:\CurrentUser\My\C91E10B00EB1D099AD5C4A26E77EB3FA0B8FDA0C" -FilePath C:\Work-TupelGit\Teeth\keys\windowsKeyELUXE3D.pfx -Password $pwd
+
+
+#SignTool in innosetup
+#go to tools, configure signtools
+#put name as signtoolELUXE
+#put command as:
+
+"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "C:\Work-TupelGit\Teeth\keys\windowsKeyELUXE3D.pfx" /t http://timestamp.comodoca.com/authenticode /p Turing1945x $f
+
+#in [setup]
+SignTool=signtoolGP_ELUXE3D
+
+Change AppId to a new value so it does not install over the other versions.
+
+#****FOR ELUXE DENTAL ****
+
+#KEYGEN - to sign pc software using inno setup
+#Run powerShell as ADMIN
+#note need to use -NotAfter, else default is to expire after 1 year.
+#default NotBefore time is 10 minutes.
+
+New-SelfSignedCertificate -Type Custom -Subject "Tupel" -KeyUsage DigitalSignature -FriendlyName "TupelKey" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") -NotAfter (Get-Date).AddYears(500)
+
+Set-Location Cert:\CurrentUser\My
+Get-ChildItem | Format-Table Subject, FriendlyName, Thumbprint
+
+#replace code B6BE... with serial number of key from windows power shell list.
+
+$pwd = ConvertTo-SecureString -String Turing1945x -Force -AsPlainText 
+Export-PfxCertificate -cert "Cert:\CurrentUser\My\F444ACE58323785B919F676C80E711663AED52F0" -FilePath C:\Work-TupelGit\Teeth\keys\windowsKeyELUXE3Ddental.pfx -Password $pwd
+
+
+#SignTool in innosetup
+#go to tools, configure signtools
+#put name as signtoolELUXEdental
+#put command as:
+
+"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "C:\Work-TupelGit\Teeth\keys\windowsKeyELUXE3Ddental.pfx" /t http://timestamp.comodoca.com/authenticode /p Turing1945x $f
+
+#in [setup]
+SignTool=signtoolGP_ELUXE3Ddental
+
+Change AppId to a new value so it does not install over the other versions.
+
+#****FOR X3D GP ****
+
+#KEYGEN - to sign pc software using inno setup
+#Run powerShell as ADMIN
+#note need to use -NotAfter, else default is to expire after 1 year.
+#default NotBefore time is 10 minutes.
+
+New-SelfSignedCertificate -Type Custom -Subject "Tupel" -KeyUsage DigitalSignature -FriendlyName "TupelKey" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") -NotAfter (Get-Date).AddYears(500)
+
+Set-Location Cert:\CurrentUser\My
+Get-ChildItem | Format-Table Subject, FriendlyName, Thumbprint
+
+#replace code B6BE... with serial number of key from windows power shell list.
+
+$pwd = ConvertTo-SecureString -String Turing1945x -Force -AsPlainText 
+Export-PfxCertificate -cert "Cert:\CurrentUser\My\7BB5AB818733106BD47461BAE4FFBB0CFDE8D174" -FilePath C:\Work-TupelGit\Teeth\keys\windowsKeyX3D_GP.pfx -Password $pwd
+
+
+#SignTool in innosetup
+#go to tools, configure signtools
+#put name as signtoolX3D
+#put command as:
+
+"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "C:\Work-TupelGit\Teeth\keys\windowsKeyX3D_GP.pfx" /t http://timestamp.comodoca.com/authenticode /p Turing1945x $f
+
+#in [setup]
+SignTool=signtoolGP_X3D
+
+Change AppId to a new value so it does not install over the other versions.

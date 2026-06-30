@@ -1,0 +1,278 @@
+to add command rs to OS:
+in /etc/bash.bashrc
+alias rs='cd /home/pi/Teeth/release2 ; sudo kill -9 $(ps -A | grep python | awk '{print $1}') ; sudo python3 main.py'
+
+
+
+#kill python so server works again
+sudo kill -9 $(ps -A | grep python | awk '{print $1}')
+
+
+debugging:
+sudo python3 main.py &>log.txt
+#outputs all messages and errors to log.txt
+
+#can track unclosed network connections with:
+sudo lsof -i -a 
+#or
+sudo lsof -i -a -p 3136|wc -l
+#on pi in python if os has to close port after 16 mins because its left hanging, then the whole python server crashes, so must take care to close them all to prevent scanner freezing up.
+
+#can use TCPView in sysInternal software to view tcp connections hanging on pc.  Though these seem fairly harmless (do not crash server).
+#BUG is pi OS causes network freeze over usb so need to use this specific commit (used for v4):
+sudo rpi-update 50b1622c54b5df93cf473e988c4a86441f8f437a
+
+
+install for release:
+
+#STOP CLI WRITING OVER IMAGES (when using new fb0 write method)
+#https://raspberrypi.stackexchange.com/questions/67607/is-it-possible-to-disable-the-boot-messages-and-terminal-on-the-pitft-while-usin
+#add line
+fbcon=map:2
+#sends cli to fb2 which does not exist.  doesn't work on command line, must be in /boot/cmdline.txt
+#can get cli via ssh.
+#for new pi (new boot firmware), needed to add to /boot/config.txt
+framebuffer_depth=24
+#and disable dt...overlay.
+
+
+#SD CARD SETUP
+format SD card, name TupelPi #name not important
+install raspbian buster lite (which has command line only) for pi1 and pi2
+
+#CHANGE PASSWORD
+sudo raspi-config
+
+login:pi
+pw2: 63bmwQTSS!
+
+#in raspi-config change:
+hostname: TupelPi1
+
+#Interfacing
+ - enable cameras
+ - enable serial (no, yes)
+ - enable SSH
+#performance
+  - memory split 256MB - ok for 8MP capture.
+  - could use file overlay? - new option in performance options - how to switch off in python to save calib data?
+  - audio to hdmi
+
+#log in via putty local ip e.g. 192.168.0.15 and use above pw
+#or us vnc viewer on windows and vnc on pi.
+
+#USB LAN SETUP
+https://dev.webonomic.nl/4-ways-to-connect-your-raspberry-pi-4-to-the-internet
+/boot/config.txt
+dtoverlay=dwc2
+also add:
+#https://github.com/raspberrypi/documentation/blob/master/configuration/config-txt/video.md
+framebuffer_depth=24
+enable_uart=1
+dtoverlay=dwc2
+hdmi_force_hotplug=1
+hdmi_cvt=1280 720 50 3 0 0 0
+hdmi_group=2
+hdmi_mode=88
+
+/boot/cmdline.txt
+modules-load=dwc2,g_ether
+also add:
+fbcon=map:2#to stop cli writing to the screen.
+
+#get pi ip address by using its name TupelPi.local
+#bridge
+sudo apt-get update
+sudo apt install bridge-utils
+
+#STATIC IP
+#copy interfaces file on git to /etc/network/interfaces
+#in teeth dir:
+sudo cp interfacesMaster /etc/network/interfaces
+#to adjust ports or add ports - not needed
+sudo nano /etc/services
+#test ip and port
+curl -s 169.254.213.91:5005 >/dev/null&&echo success. || echo fail.
+
+#MOUNT USB DRIVE - or use winscp
+#copy main.zip from usb stick
+#https://raspi.tv/2012/mount-a-usb-flash-drive-on-raspberry-pi
+#find usb name
+tail -f /var/log/messages
+#usually sda1
+sudo mkdir /media/usbstick
+sudo mount -t vfat -o rw /dev/sda1 /media/usbstick/
+cd /media/usbstick
+cp main.zip /home/pi
+cp main /home/pi -r
+#cd /home/pi
+
+
+#UNZIP MAIN.ZIP
+unzip main.zip
+#pw is
+nb*I2$jxMnNl60I+t&EE1GU0HbWert!
+#had to install missed libs to get working:
+#for libGL.so.1
+sudo apt update
+sudo apt install libgl1-mesa-glx
+
+#ADD ARDUINO INSTALLER
+#update HW to v2.02
+1a-VHRHOjkD-SfZ1jgomzZZ_Y3bQ9LWV9
+#On pi (via putty)
+RW
+#On PC command prompt:
+cd C:\Work-TupelGit\Teeth\arduino\piInstaller
+pscp arduino-1.8.10-linuxarm.tar.xz pi@169.254.30.155:/home/pi/arduino-1.8.10-linuxarm.tar.xz
+#On pi (via putty)
+sudo tar -xvf arduino-1.8.10-linuxarm.tar.xz
+cd arduino-1.8.10/
+sudo ./install.sh
+ro
+
+
+
+
+#READ ONLY
+http://hallard.me/raspberry-pi-read-only/
+#and some bits of
+https://k3a.me/how-to-make-raspberrypi-truly-read-only-reliable-and-trouble-free/
+#see buster in comments at end of page
+#shouldn't have touched /var/run I did and this may have caused wpa to never start and delay boot, so tried:
+sudo systemctl disable wpa_supplicant.service
+#this did the trick, but I expect wifi not to work, though it did seem to work even with time out when enabled.
+
+#put on static ip first
+#edit /etc/fstab to boot in ro or rw
+#while running use
+mount -o remount,rw /
+mount -o remount,rw /boot
+#or
+mount -o remount,ro /
+mount -o remount,ro /boot
+#to change read or read write, or just type ro or rw
+
+#FUTURE WORK ON CORRUPTION
+#https://technolinchpin.wordpress.com/2017/04/11/1220/
+#https://elixir.bootlin.com/linux/v3.10/source/Documentation/filesystems/ext3.txt
+
+
+#AUTO START
+#NOTE THAT RC.LOCAL CAN MAKE IT NEVER REACH PROMT SO KILL Device
+sudo nano /etc/rc.local
+#add lines:
+cd /home/pi
+sudo python3 update.py
+cd /home/pi/main
+(sudo ./main) &
+#before exit 0
+
+#AUTO START WITH DEBUG AND GUI
+https://learn.sparkfun.com/tutorials/how-to-run-a-raspberry-pi-program-on-startup/method-2-autostart
+
+#FIX DISK ON BOOT? 
+https://www.raspberrypi.org/forums/viewtopic.php?f=63&t=127512
+#sudo fdisk -l
+sudo fsck -f -y /dev/mmcblk0p1 #(pi4 sd card) errors if mounted but works since in ro mode, and can fix stuff.
+sudo fsck -f -y /dev/mmcblk0p2
+#this failed to fix pink screen of death on v1 unit from field (pi2 card and pi have had failures).  I put corrupt pi2 card in pi1 and did these fix commands and it did not fix the pi2 card. This means this is not a sure way to fix corruption.
+
+
+#RE-INSTALL ARDUINO CODE
+#SETUP
+#download from arduino.cc linux arm 32 bit version
+#unzip
+#sudo ./install.sh
+#upload to arduino
+arduino --board arduino:avr:nano:cpu=atmega328old --port /dev/ttyUSB0 --upload scannerOwnMaths.ino
+
+#TO CONVERT PI1 TO PI2 CARD
+#nice because maybe able to self fix corrupt sd via network boot one day?
+#change hostname
+#change interfacing: interfacesSlave file.
+sudo cp interfacesDevSlave /etc/network/interfaces
+#change HDMI settings?
+To /boot/config.txt change... 
+[TBD]
+hdmi_drive=2 #makes sound work through hdmi
+#hdmi_force_hotplug=1
+#hdmi_group=2
+#hdmi_mode=85
+#https://github.com/raspberrypi/documentation/blob/master/configuration/config-txt/video.md
+[TDB]
+#change update so proj not turned on?
+#change /boot/cmdline.txt so cli shows on display (remove fbcon...)
+
+
+
+
+
+#DEVELOPMENT CARD:
+
+#GIT
+git clone https://github.com/TupelUK/Teeth
+sudo apt-get install git-gui -y
+git config credential.helper store
+#then pull
+git config --global user.email "jonathan.mather@tupel.co.uk"
+git config --global user.name "Jonathan Mather"
+
+#INSTALL - for devel sd card
+sudo apt-get update
+#opencv
+#https://raspberrypi.stackexchange.com/questions/100253/how-can-i-install-opencv-on-raspberry-pi-4-raspbian-buster
+sudo apt-get install python3-opencv
+sudo pip3 install scipy
+#NUMBA pi 4, 
+#apt list python*numba  #to find package #if necessary
+sudo apt install python3-numba
+#update pi - necessary?
+sudo rpi-update #does firmware update for pi4
+sudo pip3 install pyinstaller
+sudo pip3 install pyarmor
+#numpy
+sudo pip3 install numpy
+sudo apt-get install python-dev libatlas-base-dev
+sudo apt-get install zip
+sudo pip3 install pyzbar
+sudo pip3 install sympy
+sudo pip3 install netifaces
+
+
+#SWAP FILE
+/etc/dphys-swapfile
+CONF_SWAPFILE=2000
+#or to disable
+sudo systemctl disable dphys-swapfile
+
+#VER2 STOP SCREEN SAVER - windows
+#https://www.geeks3d.com/hacklab/20160108/how-to-disable-the-blank-screen-on-raspberry-pi-raspbian/
+#I put this in main.py
+xset s off
+xset -dpms 
+xset s noblank
+
+#CPU TEMP
+vcgencmd measure_temp
+#VOLTAGE
+vcgencmd get_throttled
+Bad PI: throttled=0x50005
+Good PI: throttled=0x50000
+
+#HARDWARE UPDATES
+#bump version number in constants
+#make code on pi, run:
+obfuscateV2.sh
+# zip updates - "get sharable link" using google drive on web seems to work to get the id, maybe it doesn't from windows.
+# zip overwrites existing files
+
+#IF PYARMOR FAILS:
+#test to see if pyinstaller works, if recusion error try this:
+#https://stackoverflow.com/questions/38977929/pyinstaller-creating-exe-runtimeerror-maximum-recursion-depth-exceeded-while-ca
+#add lines to spec file for larger recursion limit.
+main.spec #in Teeth folder
+
+
+
+
