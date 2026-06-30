@@ -12,7 +12,13 @@ import traceback
 
 class RealTimeProcessing():
             
-    def __init__(self, syncMaster=True):   #send a pi2piSerial and it will do camera sync upon first frame capture, then delete it
+    def __init__(self, syncMaster=True, camera_id=0):
+        """
+        :param syncMaster: True if this RealTimeProcessing drives the projector
+                           (always True for camera 0; False for camera 1).
+        :param camera_id: 0 = left camera (mCapture), 1 = right camera (mCaptureRight).
+        """
+        self.camera_id = camera_id
         self.getFrame=-1#-1 is dummy, 3 means get frame 3 and put in imageSet[3] etc.
         self.captureDoneEvent = Event()
         self.captureDoneEvent.set()#done, so can sync
@@ -35,16 +41,26 @@ class RealTimeProcessing():
         self.colourImage=None
         self.jpgNotComplete=-1
         self.projStarted=False
-        
+
+    def _get_capture(self):
+        """Return the capture object that feeds this RealTimeProcessing instance."""
+        if self.camera_id == 1:
+            return constants.Control.mCaptureRight
+        return constants.Control.mCapture
+
     def updateFrameTime(self, framerate=None):#called from mCapture if frame rate changes
         if framerate is None:
-            framerate=constants.Control.mCapture.camera.framerate
+            cap = self._get_capture()
+            if cap is None:
+                return
+            framerate = cap.camera.framerate
         self.frameTime=1000000*1.0/framerate
 
     def generateCaptureTimes(self, numberOfImages):
         #proj screen freq : 60.61Hz, 60Hz, 50Hz, 59.94Hz - 60.61Hz USED, now on 59.86 - cvt mode
         self.updateFrameTime()
-        currentTime=constants.Control.mCapture.camera.timestamp
+        cap = self._get_capture()
+        currentTime=cap.camera.timestamp
         lastCaptureTimeEstimated=self.lastCaptureTime+self.frameTime*math.ceil((currentTime-self.lastCaptureTime)/self.frameTime)
         imageTimeRounded = self.frameTime * (math.ceil(constants.Scanning.IMAGE_SYNC_ERROR_MARGIN / self.frameTime)+2)
         endTime=constants.Scanning.CAPTURE_START_DELAY_TARGET+constants.Scanning.LATENCY+imageTimeRounded
@@ -70,7 +86,8 @@ class RealTimeProcessing():
     def generateCaptureTimesLAGTEST(self, numberOfImages):
         #proj screen freq : 60.61Hz, 60Hz, 50Hz, 59.94Hz - 60.61Hz USED, now on 59.86 - cvt mode
         self.updateFrameTime()
-        currentTime=constants.Control.mCapture.camera.timestamp
+        cap = self._get_capture()
+        currentTime=cap.camera.timestamp
         lastCaptureTimeEstimated=self.lastCaptureTime+self.frameTime*math.ceil((currentTime-self.lastCaptureTime)/self.frameTime)
         #imageTimeRounded = self.frameTime * (math.ceil(constants.Scanning.IMAGE_SYNC_ERROR_MARGIN / self.frameTime)+2)
         imageTimeRounded=self.frameTime
@@ -124,7 +141,8 @@ class RealTimeProcessing():
 
     def write(self, s):
         try:
-            captureTime=constants.Control.mCapture.camera.frame.timestamp        #system time clock - used by gpu and camera.
+            cap = self._get_capture()
+            captureTime=cap.camera.frame.timestamp        #system time clock - used by gpu and camera.
             
             if self.jpgNotComplete >-1 and not self.captureDoneEvent.is_set():#and if not done:
                 if len(self.imageSet)>self.jpgNotComplete:
@@ -170,9 +188,9 @@ class RealTimeProcessing():
             #SYNC
             if self.syncingCameras and self.captureDoneEvent.is_set() is True:#sync only when not capturing to avoid frame skips
                 if self.syncMaster:
-                    constants.Control.mCapture.mSyncerMaster.syncCameras(constants.Control.mCapture.camera.timestamp, captureTime)
+                    cap.mSyncerMaster.syncCameras(cap.camera.timestamp, captureTime)
                 else:
-                    constants.Control.mCapture.mSyncerSlave.syncCameras(captureTime)
+                    cap.mSyncerSlave.syncCameras(captureTime)
                     
         except Exception as e:
             print('Error realTimeAsync2: ',e)

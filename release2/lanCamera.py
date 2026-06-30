@@ -8,12 +8,15 @@ import lanClientPi
 import lanHelpers
 import cv2
 
+def _is_pi5():
+    return os.uname()[1] == constants.Info.PI5_UNAME
+
 def startCamera():
     if constants.Control.mCapture.isOpen():
         print('start camera: camera already open')
         return
     
-    constants.Control.mCapture = captureVideo.capture(preview=False)
+    constants.Control.mCapture = captureVideo.capture(preview=False, camera_id=0)
 
     print('camera started')
     
@@ -59,26 +62,40 @@ def getCameraImage(clientPC, commandDict):
             lanHelpers.gracefullClose(clientPC)
 
         mStream.close()
-        # print('SENT CAMERA IMAGE', time.time()-tick)
     except Exception as e:
         print('getCameraImage2', e)
     return
 
-def getCameraSyncInfo(clientPC, commandDict):#used by pi2: triggered when pi1 has sent pi1 clock info to pi2.
+def getCameraSyncInfo(clientPC, commandDict):
+    """Receive clock-sync data sent from the master camera.
+    On Pi4 this arrives over the LAN from Pi1.
+    On Pi5 it is called directly (clientPC is None); the clock offset is 0
+    because both cameras share the same hardware clock.
+    """
     clockPi1 = commandDict['clockPi1']
     constants.Protocol.CAPTURE_TIME_PI_1 = commandDict['captureTimePi1']
-    if constants.Control.mCapture is not None:
-        if constants.Control.mCapture.isOpen():
+
+    # Determine clock offset
+    if _is_pi5():
+        # Both cameras on the same Pi5 share the same hardware clock.
+        # CLOCK_OFFSET stays 0; still keep a running buffer so the sync
+        # maths work without special-casing.
+        clockOffset = 0
+    else:
+        if constants.Control.mCapture is not None and constants.Control.mCapture.isOpen():
             clockPi2 = constants.Control.mCapture.camera.timestamp
             clockOffset = clockPi2 - clockPi1
-            if len(constants.Protocol.CLOCK_OFFSET_BUFFER) == 100:  # buffer last 20 or so readings and take min (had lowest latency
-                constants.Protocol.CLOCK_OFFSET_BUFFER = constants.Protocol.CLOCK_OFFSET_BUFFER[1:] + [clockOffset]
-            else:
-                constants.Protocol.CLOCK_OFFSET_BUFFER += [clockOffset]
-            constants.Protocol.CLOCK_OFFSET = min(constants.Protocol.CLOCK_OFFSET_BUFFER)
-            rangeTest = max(constants.Protocol.CLOCK_OFFSET_BUFFER) - constants.Protocol.CLOCK_OFFSET
-    # print('CAPTURE_TIME_PI_1',constants.Protocol.CAPTURE_TIME_PI_1, 'CLOCK_OFFSET (msec)', constants.Protocol.CLOCK_OFFSET /1000, 'rangeTest',rangeTest)
-    lanHelpers.gracefullClose(clientPC)
+        else:
+            clockOffset = 0
+
+    if len(constants.Protocol.CLOCK_OFFSET_BUFFER) == 100:
+        constants.Protocol.CLOCK_OFFSET_BUFFER = constants.Protocol.CLOCK_OFFSET_BUFFER[1:] + [clockOffset]
+    else:
+        constants.Protocol.CLOCK_OFFSET_BUFFER += [clockOffset]
+    constants.Protocol.CLOCK_OFFSET = min(constants.Protocol.CLOCK_OFFSET_BUFFER)
+
+    if clientPC is not None:
+        lanHelpers.gracefullClose(clientPC)
     return
 
 

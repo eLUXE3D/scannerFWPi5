@@ -22,7 +22,7 @@ POLLING_TIME = 0.25  # seconds between checking for new images etc. coming in.
 
 def setup():
     # GET HW INFO
-    if os.uname()[1] == constants.Info.MASTER_UNAME:
+    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
         constants.Info.SERIAL_PI1_ACTUAL = getSerialPi()
         # constants.Info.BT_MAC_PI1 = self.getBTmacPi()
         constants.Info.MAC_PI1 = getMacPi()
@@ -143,7 +143,7 @@ def changeSettings(commandDict):
         if constants.Scanning.SCAN_IMAGE_ARRAY_FILENAMES != commandDict["SCAN_IMAGE_ARRAY_FILENAMES"]:
             constants.Scanning.SCAN_IMAGE_ARRAY_FILENAMES = commandDict["SCAN_IMAGE_ARRAY_FILENAMES"]  
             #reload images if necessary and if master
-            if os.uname()[1] == constants.Info.MASTER_UNAME:
+            if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
                 constants.Control.mProjScreen.loadImagesAndResize()        
     if "SCAN_IMAGE_LIST" in commandDict:
         constants.Scanning.SCAN_IMAGE_LIST = commandDict["SCAN_IMAGE_LIST"]  # VERSION 4
@@ -186,7 +186,7 @@ def changeSettings(commandDict):
     if "DEBUG_NUMBER_IMAGES" in commandDict: # VERSION 4.05
         if constants.DEBUG.DEBUG_NUMBER_IMAGES != commandDict["DEBUG_NUMBER_IMAGES"]:#if changed
             constants.DEBUG.DEBUG_NUMBER_IMAGES = commandDict["DEBUG_NUMBER_IMAGES"]
-            if os.uname()[1] == constants.Info.MASTER_UNAME:
+            if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
                 constants.Control.mProjScreen.loadImagesAndResize()
 
     #CAMERA SETTINGS
@@ -226,7 +226,7 @@ def changeSettings(commandDict):
 
 
 def pingReply(clientPC, commandDict):
-    if os.uname()[1] == constants.Info.MASTER_UNAME:
+    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
         replyDict={"pingReplyCode":constants.Info.PING_REPLY_CODE_MASTER,
                    "scannerName": constants.Info.SCANNER_NAME,
                    "hwVersion": constants.Info.HW_VERSION,
@@ -288,7 +288,7 @@ def diagnosisReply(clientPC):#added in v2.05
     upTimeMins=int(time.clock_gettime(time.CLOCK_BOOTTIME)/60.0)
     print('upTimeMins', upTimeMins)
     strength, quality=None,None
-    if os.uname()[1] == constants.Info.MASTER_UNAME:
+    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
         pingReplyCode=constants.Info.PING_REPLY_CODE_MASTER
         strength, quality=wifiStats.getWifiStrengthAndQuality()
     if os.uname()[1] == constants.Info.SLAVE_UNAME:

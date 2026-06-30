@@ -16,10 +16,13 @@ class Control():
     
     #classes
     mServer=None
-    mCapture=None
+    mCapture=None          # Camera 0 (left) – always Pi1/master camera
+    mCaptureRight=None     # Camera 1 (right) – Pi5 only; replaces the slave Pi camera
     mRealTime= None
+    mRealTimeRight=None    # Pi5 only: RealTimeProcessing for Camera 1
     mScanMaster=None
     mScanSlave=None
+    mScanSlaveLocal=None   # Pi5 only: in-process ScanSlave instance for Camera 1
     mProjScreen=None
     #queues and flags
     decodeImageQ=None
@@ -63,6 +66,7 @@ class Info():
     SW_VERSION='0.00'
     MASTER_UNAME='TupelPi1'
     SLAVE_UNAME='TupelPi2'
+    PI5_UNAME='TupelPi5'   # hostname for the single Raspberry Pi 5 unit
     SERIAL='1'
     SERIAL_PI1='TBD'
     SERIAL_PI2='TBD'

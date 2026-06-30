@@ -17,7 +17,7 @@ print('Working dir', os.getcwd())
 #sys.stdout = open(os.devnull, 'w')  # Disable print
 #sys.stdout = sys.__stdout__  # Restore print
 
-if os.uname()[1]==constants.Info.MASTER_UNAME:
+if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
     #keep screen always on for proj
     subprocess.call(['sudo', 'xset', 's','off'])
     subprocess.call(['sudo', 'xset', '-dpms'])

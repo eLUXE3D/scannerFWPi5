@@ -4,6 +4,7 @@ import time
 from multiprocessing import Manager, JoinableQueue
 import constants
 import scanMaster
+import os
 try:
     if constants.DEBUG.PROJ_SCREEN_DEBUG_MODE:
         import projScreen#pygame based - works in gui
@@ -22,6 +23,11 @@ import lanCamera
 import lanSender
 from threading import Event
 import loadStartTarget
+import scanSlave
+
+
+def _is_pi5():
+    return os.uname()[1] == constants.Info.PI5_UNAME
 
 
 POLLING_TIME=0.25#seconds between checking for new images etc. coming in.
@@ -43,16 +49,23 @@ class lanServerMaster():
         
         self.server = self.ThreadedTCPServer((constants.Protocol.IP_PI1, constants.Protocol.TCP_PORT), self.ThreadedTCPRequestHandler)  # Port 0 means to select an arbitrary unused port
         
-        #classes
-        constants.Control.mCapture=captureVideo.capture(preview=False)
+        #classes – Camera 0 (left / master camera)
+        constants.Control.mCapture=captureVideo.capture(preview=False, camera_id=0)
         constants.Control.mCapture.closeCamera()
+
+        # Pi5: also initialise Camera 1 (right / slave camera)
+        if _is_pi5():
+            constants.Control.mCaptureRight = captureVideo.capture(preview=False, camera_id=1)
+            constants.Control.mCaptureRight.closeCamera()
+            constants.Control.mScanSlaveLocal = scanSlave.ScanSlave()
+            print('Pi5: right camera and local ScanSlave initialised')
+
         constants.Control.mProjScreen=projScreen.projScreen()
         constants.Control.mProjScreen.loadImagesAndResize()
         constants.Control.mProjScreen.showImageFromFile('magen')
         constants.Control.mScanMaster=scanMaster.ScanMaster()
         
         #queues and flags
-        #constants.Control.decodeImageQ=JoinableQueue(maxsize=12)
         with constants.Control.imageLock:
             constants.Control.pcImageList=Manager().list()
         constants.Control.mLanSender=lanSender.lanSender()
@@ -77,7 +90,6 @@ class lanServerMaster():
     def getIPaddressFromPort(self, ifname='usb0'):
         try:
             ipAddresses=netifaces.ifaddresses(ifname)
-            #print(ifname, ipAddresses)
             ipAddress=ipAddresses[netifaces.AF_INET][0]['addr']#AF_INET if normal ip4 address
             print(ifname, ipAddress)
         except Exception as e:
@@ -91,7 +103,6 @@ class lanServerMaster():
     class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         allow_reuse_address=True
         
-        #The request handler class for our server. It is instantiated once per connection to the server, and must override the handle() method to implement communication to the client.
         def handle(self):#NOTE self is not mLanServer, its a handle class, so get variables globally
             #RECEIVE MESSAGE FROM CLIENT
             try:
@@ -211,10 +222,7 @@ class lanServerMaster():
                 lanHelpers.doneReply(self.request, CMD_ID=commandDict["CMD_ID"], success=True)
                 return
             if commandDict["command"] == constants.Protocol.CMD_MOTOR_TO_ZERO:
-                #if constants.Control.mCapture.closed:
-                #    constants.Control.mCapture = captureVideo.capture(preview=False)
                 constants.Control.mMotors.moveToZero()
-                #constants.Control.mCapture.closeCamera()
                 lanHelpers.doneReply(self.request, CMD_ID=commandDict["CMD_ID"], success=True)
                 return
             if commandDict["command"] == constants.Protocol.CMD_MOTOR_MOVE_TO:
@@ -266,10 +274,6 @@ class lanServerMaster():
                 if constants.Info.SERIAL_PI1 != constants.Info.SERIAL_PI1_ACTUAL:
                     constants.Info.HW_VERSION='Unknown'
                     return
-                #constants.Info.STATUS_CODE=constants.Protocol.STATUS_BUSY
-                #if constants.Control.mCapture.closed:
-                #    constants.Control.mCapture = captureVideo.capture(preview=False)
-                #reset done commands list so it doesn't become massive
                 constants.Control.doneCommands = Manager().list()
                 constants.Control.newCommandDoneFlag = Event()
                 constants.Control.newCommandDoneFlag.clear()
@@ -279,7 +283,6 @@ class lanServerMaster():
                 else:
                     SCAN_ID=None
                 constants.Control.mScanMaster.projScan(SCAN_ID=SCAN_ID)
-                #constants.Info.STATUS_CODE = constants.Protocol.STATUS_READY
                 return
             if commandDict["command"]==constants.Protocol.CMD_GET_SHOT_DATA:
                 constants.Control.mLanSender.sendNextImageToPC(self.request, commandDict)
@@ -305,7 +308,6 @@ class lanServerMaster():
 
 
 
-
     def start(self):
         # Start a thread with the server -- that thread will then start one
         # more thread for each request
@@ -318,15 +320,15 @@ class lanServerMaster():
 
 
 
-
+    
 def startServer():
     osCommands.setRO()
-    #The purpose of making mLanServer global is so that the server thread can access all mLanServer variables, and it can pass mLanServer to projScan an triangulatorProcessor threads so they can access the same variables as the server threads to pass data around.
-    #lobal mLanServer
     constants.Control.mServer=lanServerMaster()
     try:
         constants.Control.mServer.start()
-        lanHelpers.waitForPi2Ready()
+        if not _is_pi5():
+            # Pi4: wait for the slave Pi to be ready before showing idle image
+            lanHelpers.waitForPi2Ready()
         constants.Control.mProjScreen.showImageFromFile(constants.Scanning.IDLE_IMAGE)
         while True:
             time.sleep(99999)

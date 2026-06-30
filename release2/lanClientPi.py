@@ -6,21 +6,33 @@ import json
 import osCommands
 import uuid
 import time
+import os
+import threading
+
+def _is_pi5():
+    return os.uname()[1] == constants.Info.PI5_UNAME
+
 
 class lanClientPi():
     # variable shared over all classes
 
     def __init__(self):
         # variable for this instance - self..
-        self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if not _is_pi5():
+            self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        else:
+            self.sock = None
         self.connectionFail=False
+
+    # ------------------------------------------------------------------
+    # Low-level TCP helpers (Pi4 only)
+    # ------------------------------------------------------------------
 
     def sendCommand(self, TCP_IP, TCP_PORT, commandJSON):
         retries=3
         for i in range(retries):
             success=self.sendCommandNoRetry(TCP_IP, TCP_PORT, commandJSON)
-            #print(commandJSON, self.sock.getsockname())
             if success:
                 break
             print('Retrying LAN connection')
@@ -42,7 +54,6 @@ class lanClientPi():
             self.gracefullClose()
             self.sock=0
             return False
-        #print('SENT: ', commandJSON)
         return True
 
     def gracefullClose(self):
@@ -55,7 +66,35 @@ class lanClientPi():
             self.sock.close()
         except Exception as e:
             print('ERROR: gracefullClose ', e)
-        
+
+    # ------------------------------------------------------------------
+    # Pi5: in-process dispatch helpers
+    # ------------------------------------------------------------------
+
+    def _dispatchPi2ModeLocally(self, commandDict):
+        """Run scanSlave.setPi2Mode() in a background thread and post the
+        result to doneCommands so lanHelpers.checkIfDone() works unchanged."""
+        CMD_ID = commandDict["CMD_ID"]
+        def _run():
+            try:
+                msgDict = constants.Control.mScanSlaveLocal.setPi2Mode(commandDict)
+            except Exception as e:
+                print('Pi5 local Pi2 dispatch error:', e)
+                msgDict = {}
+            constants.Control.doneCommands.append((CMD_ID, msgDict))
+            constants.Control.newCommandDoneFlag.set()
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+    def _syncCameraLocally(self, clockPi1, captureTimePi1):
+        """On Pi5: update the clock-sync constants directly (no LAN round-trip)."""
+        import lanCamera
+        commandDict = {'clockPi1': clockPi1, 'captureTimePi1': captureTimePi1}
+        lanCamera.getCameraSyncInfo(None, commandDict)
+
+    # ------------------------------------------------------------------
+    # Public API (works on both Pi4 and Pi5)
+    # ------------------------------------------------------------------
 
     def pingScanner(self, IP, PORT):
         commandDict={ "header":constants.Protocol.HEADER,
@@ -85,7 +124,6 @@ class lanClientPi():
 
         # PUT NUMPY IMAGE INTO A FILE IN MEMORY
         f = io.BytesIO()
-        #np.savez_compressed(f, printCoordsSet=printCoordsSet, cameraCoordsSet=cameraCoordsSet, undistortedcameraPrintCoordsSet=undistortedcameraPrintCoordsSet)
         np.savez(f, printCoordsSet=printCoordsSet, cameraCoordsSet=cameraCoordsSet, undistortedcameraPrintCoordsSet=undistortedcameraPrintCoordsSet)
         # SEND IMAGE TO SERVER
         f.seek(0, 0)
@@ -93,6 +131,7 @@ class lanClientPi():
             self.sock.sendfile(f, 0)
         except Exception as e:
             print('ERROR: sendCalibPointsToPi1 ', e)
+            import traceback
             traceback.print_exc()
         finally:
             self.gracefullClose()
@@ -121,6 +160,11 @@ class lanClientPi():
         return
 
     def sendCameraSyncInfo(self, clockPi1, captureTimePi1):
+        if _is_pi5():
+            # Both cameras are on the same machine; update the constant directly.
+            self._syncCameraLocally(clockPi1, captureTimePi1)
+            return True
+
         commandDict = {"header": constants.Protocol.HEADER,
                        "command": constants.Protocol.CMD_SYNC_CAMERA,
                        "clockPi1": clockPi1,
@@ -129,8 +173,7 @@ class lanClientPi():
 
         if not self.sendCommand(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2, commandJSON):
             return False  # if time out return
-        #not doing graceful close - doesn't seem to cause a problem? and I don't want to slow it down.
-        return
+        return True
 
 
     def setPi2mode(self, PI2_MODE, EXPOSURE_TIME_SCAN=None, EXPOSURE_TIME_CALIB=None, IMAGE_NUMBER=None, idealCaptureTimeMinPi1=None, PLATE_NUMBER=None, SHOT_NUMBER=None, CAPTURE_TIME_LIST=None, SCAN_IMAGE_LIST=None, RETRY=None, IMAGE_ORDER=None, PROJ_ERROR_LIST=None, SCAN_ID=None):#'scan', 'calib', 'reset'
@@ -162,7 +205,12 @@ class lanClientPi():
             commandDict["PROJ_ERROR_LIST"] = PROJ_ERROR_LIST
         if SCAN_ID is not None:
             commandDict["SCAN_ID"] = SCAN_ID
-            
+
+        if _is_pi5():
+            # Dispatch directly in-process to the local ScanSlave instance.
+            self._dispatchPi2ModeLocally(commandDict)
+            return CMD_ID
+
         commandJSON=json.dumps(commandDict)
 
         if not self.sendCommand(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2, commandJSON):
@@ -184,6 +232,10 @@ class lanClientPi():
         return
 
     def commandDone(self, CMD_ID, msgDict={}):
+        if _is_pi5():
+            # On Pi5 there is no Pi2 to notify; the caller already handles results.
+            return True
+
         commandDict = {"header": constants.Protocol.HEADER,
                        "command": constants.Protocol.CMD_DONE,
                        "CMD_ID": CMD_ID}
@@ -201,6 +253,3 @@ if __name__ == "__main__":
     pass
     mLanClient=lanClientPi()
     mLanClient.pingScanner('169.254.30.155', 5005)
-    
-
-    
