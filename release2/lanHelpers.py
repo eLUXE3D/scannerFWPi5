@@ -22,16 +22,9 @@ POLLING_TIME = 0.25  # seconds between checking for new images etc. coming in.
 
 def setup():
     # GET HW INFO
-    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
-        constants.Info.SERIAL_PI1_ACTUAL = getSerialPi()
-        # constants.Info.BT_MAC_PI1 = self.getBTmacPi()
-        constants.Info.MAC_PI1 = getMacPi()
-        piSerialKey='SERIAL_PI1'
-    if os.uname()[1] == constants.Info.SLAVE_UNAME:
-        constants.Info.SERIAL_PI2_ACTUAL = getSerialPi()
-        # constants.Info.BT_MAC_PI2 = self.getBTmacPi()
-        constants.Info.MAC_PI2 = getMacPi()
-        piSerialKey='SERIAL_PI2'
+    constants.Info.SERIAL_HW_ACTUAL = getSerialPi()
+    constants.Info.MAC = getMacPi()
+    piSerialKey='SERIAL_PI1'
 
     # LOAD SETUP FILE
     try:
@@ -71,12 +64,8 @@ def setup():
             constants.Info.SERIAL = commandDict['SERIAL']
         if "IP_PI1" in commandDict:
             constants.Protocol.IP_PI1 = commandDict['IP_PI1']
-        if "IP_PI2" in commandDict:
-            constants.Protocol.IP_PI2 = commandDict['IP_PI2']
         if "SERIAL_PI1" in commandDict:
-            constants.Info.SERIAL_PI1 = commandDict['SERIAL_PI1']
-        if "SERIAL_PI2" in commandDict:
-            constants.Info.SERIAL_PI2 = commandDict['SERIAL_PI2']
+            constants.Info.SERIAL_HW = commandDict['SERIAL_PI1']
         #if "BT_UUID_PI1" in commandDict:#not checked from v3.02on
         #    constants.BlueTooth.BT_UUID_PI1 = commandDict['BT_UUID_PI1']
         #if "BT_MAC_PROJ" in commandDict:#not checked from v3.02on
@@ -141,10 +130,8 @@ def changeSettings(commandDict):
         constants.FringeMode.FRINGE_MODE = commandDict["FRINGE_MODE"]  # VERSION 4
     if "SCAN_IMAGE_ARRAY_FILENAMES" in commandDict:# VERSION 4
         if constants.Scanning.SCAN_IMAGE_ARRAY_FILENAMES != commandDict["SCAN_IMAGE_ARRAY_FILENAMES"]:
-            constants.Scanning.SCAN_IMAGE_ARRAY_FILENAMES = commandDict["SCAN_IMAGE_ARRAY_FILENAMES"]  
-            #reload images if necessary and if master
-            if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
-                constants.Control.mProjScreen.loadImagesAndResize()        
+            constants.Scanning.SCAN_IMAGE_ARRAY_FILENAMES = commandDict["SCAN_IMAGE_ARRAY_FILENAMES"]
+            constants.Control.mProjScreen.loadImagesAndResize()
     if "SCAN_IMAGE_LIST" in commandDict:
         constants.Scanning.SCAN_IMAGE_LIST = commandDict["SCAN_IMAGE_LIST"]  # VERSION 4
     if "SCAN_ANGLES" in commandDict:
@@ -186,8 +173,7 @@ def changeSettings(commandDict):
     if "DEBUG_NUMBER_IMAGES" in commandDict: # VERSION 4.05
         if constants.DEBUG.DEBUG_NUMBER_IMAGES != commandDict["DEBUG_NUMBER_IMAGES"]:#if changed
             constants.DEBUG.DEBUG_NUMBER_IMAGES = commandDict["DEBUG_NUMBER_IMAGES"]
-            if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
-                constants.Control.mProjScreen.loadImagesAndResize()
+            constants.Control.mProjScreen.loadImagesAndResize()
 
     #CAMERA SETTINGS
     if "ISO" in commandDict:
@@ -226,47 +212,23 @@ def changeSettings(commandDict):
 
 
 def pingReply(clientPC, commandDict):
-    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
-        replyDict={"pingReplyCode":constants.Info.PING_REPLY_CODE_MASTER,
-                   "scannerName": constants.Info.SCANNER_NAME,
-                   "hwVersion": constants.Info.HW_VERSION,
-                   "swVersion": constants.Info.SW_VERSION,
-                   "masterUname": constants.Info.MASTER_UNAME,
-                   "slaveUname": constants.Info.SLAVE_UNAME,
-                   "statusCode": constants.Info.STATUS_CODE,
-                   "serial": constants.Info.SERIAL,
-                   "SERIAL_PI1_ACTUAL": constants.Info.SERIAL_PI1_ACTUAL,
-                   "BT_MAC_PI1": constants.Info.BT_MAC_PI1,
-                   "MAC_PI1": constants.Info.MAC_PI1,
-                   "PLATE_NUMBER": constants.Scanning.PLATE_NUMBER,  #added v3.01
-                   "PROJ_MODEL": constants.Info.PROJ_MODEL,  #added v3.02
-                   "LEVELLER": constants.Info.LEVELLER,  #added v4
-                   "LENSES": constants.Info.LENSES,  # added v4
-                    "TYPE": constants.Info.TYPE,
-                    "WIFI_READY": constants.Info.WIFI_READY,
-                   "CODE": constants.Info.CODE
-                   }
-
-    if os.uname()[1] == constants.Info.SLAVE_UNAME:
-        replyDict={"pingReplyCode":constants.Info.PING_REPLY_CODE_SLAVE,
-                   "scannerName": constants.Info.SCANNER_NAME,
-                   "hwVersion": constants.Info.HW_VERSION,
-                   "swVersion": constants.Info.SW_VERSION,
-                   "masterUname": constants.Info.MASTER_UNAME,
-                   "slaveUname": constants.Info.SLAVE_UNAME,
-                   "statusCode": constants.Info.STATUS_CODE,
-                   "serial": constants.Info.SERIAL,
-                   "SERIAL_PI2_ACTUAL": constants.Info.SERIAL_PI2_ACTUAL,
-                   "BT_MAC_PI2": constants.Info.BT_MAC_PI2,
-                   "MAC_PI2": constants.Info.MAC_PI2,
-                   "PLATE_NUMBER": constants.Scanning.PLATE_NUMBER,  # added v3.02
-                   "PROJ_MODEL": constants.Info.PROJ_MODEL,  #added v3.02
-                   "LEVELLER": constants.Info.LEVELLER,  #added v4
-                   "LENSES": constants.Info.LENSES,  # added v4
-                    "TYPE": constants.Info.TYPE,
-                    "WIFI_READY": constants.Info.WIFI_READY,
-                   "CODE": constants.Info.CODE
-                   }
+    replyDict={"pingReplyCode":constants.Info.PING_REPLY_CODE,
+               "scannerName": constants.Info.SCANNER_NAME,
+               "hwVersion": constants.Info.HW_VERSION,
+               "swVersion": constants.Info.SW_VERSION,
+               "statusCode": constants.Info.STATUS_CODE,
+               "serial": constants.Info.SERIAL,
+               "SERIAL_PI1_ACTUAL": constants.Info.SERIAL_HW_ACTUAL,
+               "BT_MAC_PI1": constants.Info.BT_MAC,
+               "MAC_PI1": constants.Info.MAC,
+               "PLATE_NUMBER": constants.Scanning.PLATE_NUMBER,  #added v3.01
+               "PROJ_MODEL": constants.Info.PROJ_MODEL,  #added v3.02
+               "LEVELLER": constants.Info.LEVELLER,  #added v4
+               "LENSES": constants.Info.LENSES,  # added v4
+               "TYPE": constants.Info.TYPE,
+               "WIFI_READY": constants.Info.WIFI_READY,
+               "CODE": constants.Info.CODE
+               }
 
     if commandDict['header'] == 'tD':  # if its old software making the request, nobble the old PC software
         replyDict['TYPE']='ELUXE'
@@ -287,13 +249,8 @@ def pingReply(clientPC, commandDict):
 def diagnosisReply(clientPC):#added in v2.05
     upTimeMins=int(time.clock_gettime(time.CLOCK_BOOTTIME)/60.0)
     print('upTimeMins', upTimeMins)
-    strength, quality=None,None
-    if os.uname()[1] in (constants.Info.MASTER_UNAME, constants.Info.PI5_UNAME):
-        pingReplyCode=constants.Info.PING_REPLY_CODE_MASTER
-        strength, quality=wifiStats.getWifiStrengthAndQuality()
-    if os.uname()[1] == constants.Info.SLAVE_UNAME:
-        pingReplyCode=constants.Info.PING_REPLY_CODE_SLAVE
-    replyDict={"pingReplyCode":pingReplyCode,
+    strength, quality=wifiStats.getWifiStrengthAndQuality()
+    replyDict={"pingReplyCode":constants.Info.PING_REPLY_CODE,
                "diskInfo": osCommands.getDiskInfo(),
                "RMS_SYSTEM": constants.Scanning.RMS_SYSTEM,
                "UP_TIME_MINS": upTimeMins,
@@ -475,30 +432,7 @@ def gracefullClose(clientPC):
     except Exception as e:
         print('ERROR: gracefullClose ', e)
 
-#************************************* BELOW ARE USED BY LAN MASTER ONLY *****************************************************************************
-
-
-
-def waitForPi2Ready():
-    finished = False
-    print('Waiting for Pi2')
-    while not finished:
-        mLanClientPi = lanClientPi.lanClientPi()
-        commandJSON = mLanClientPi.pingScanner(constants.Protocol.IP_PI2, constants.Protocol.TCP_PORT_PI2)
-        if mLanClientPi.connectionFail or commandJSON=='':
-            connected = False
-        else:
-            connected = True
-        if connected:
-            commandDict = json.loads(commandJSON)
-            statusCode = commandDict["statusCode"]
-
-            if statusCode == constants.Protocol.STATUS_READY:
-                finished = True
-
-        print(connected, finished)
-        time.sleep(3)
-    print('Pi2 Ready')
+#************************************* BELOW ARE USED BY LAN SERVER ONLY *****************************************************************************
 
         
 def getCalibData(clientPC, commandDict):#calib file from pi to PC

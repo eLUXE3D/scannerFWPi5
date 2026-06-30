@@ -16,10 +16,6 @@ import copy
 CALIB_IMAGE_PATH = 'scanData/calib'
 
 
-def _is_pi5():
-    return os.uname()[1] == constants.Info.PI5_UNAME
-
-
 class ScanSlave():
             
     def __init__(self):
@@ -28,30 +24,17 @@ class ScanSlave():
         self.calibImages=None
         self.expectedImages=0
 
-    # ------------------------------------------------------------------
-    # Helpers to pick the right camera / realtime objects on Pi5 vs Pi4
-    # ------------------------------------------------------------------
-
     def _capture(self):
-        """Return the capture object for the slave camera."""
-        if _is_pi5():
-            return constants.Control.mCaptureRight
-        return constants.Control.mCapture
+        """Return the capture object for the right camera."""
+        return constants.Control.mCaptureRight
 
     def _realtime(self):
-        """Return the RealTimeProcessing object for the slave camera."""
-        if _is_pi5():
-            return constants.Control.mRealTimeRight
-        return constants.Control.mRealTime
+        """Return the RealTimeProcessing object for the right camera."""
+        return constants.Control.mRealTimeRight
 
     def _set_realtime(self, rt):
-        """Assign a new RealTimeProcessing object for the slave camera."""
-        if _is_pi5():
-            constants.Control.mRealTimeRight = rt
-        else:
-            constants.Control.mRealTime = rt
-
-    # ------------------------------------------------------------------
+        """Assign a new RealTimeProcessing object for the right camera."""
+        constants.Control.mRealTimeRight = rt
 
     def setPi2Mode(self, commandDict):
         msg={}
@@ -78,9 +61,8 @@ class ScanSlave():
         with constants.Control.imageLock:
             constants.Control.pcImageList=Manager().list()
 
-        # Camera 1 (right) on Pi5, or the single camera on Pi4/Pi2
-        cam_id = 1 if _is_pi5() else 0
-        rt = realTimeAsync2.RealTimeProcessing(syncMaster=False, camera_id=cam_id)
+        # Camera 1 (right camera)
+        rt = realTimeAsync2.RealTimeProcessing(syncMaster=False, camera_id=1)
         self._set_realtime(rt)
 
         self._capture().startVideoAndProcessing(mode='mjpeg')

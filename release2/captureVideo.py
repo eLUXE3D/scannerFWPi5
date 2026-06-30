@@ -480,13 +480,11 @@ class capture():
             self.startVideoAndProcessing()
 
         # SETUP CAMERA ALIGNMENT
-        # On Pi5 use camera_id to determine left/right; on Pi4 use hostname.
+        # Use camera_id to determine left/right camera zoom.
         if _is_pi5():
             zoom = constants.Scanning.ZOOM_L if self.camera_id == 0 else constants.Scanning.ZOOM_R
-        elif os.uname()[1] == constants.Info.MASTER_UNAME:
-            zoom = constants.Scanning.ZOOM_L
         else:
-            zoom = constants.Scanning.ZOOM_R
+            zoom = constants.Scanning.ZOOM_L
 
         self.camera.zoom = zoom
 
